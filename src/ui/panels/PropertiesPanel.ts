@@ -48,6 +48,28 @@ export class PropertiesPanel {
   private sectionState = new Map<string, boolean>()
   private currentLayerSignature: string | null = null
 
+  private getLayerById(id: string): Layer | null {
+    return this.state.get('layers').find(layer => layer.id === id) ?? null
+  }
+
+  private updateNoise(id: string, buildPatch: (layer: Layer) => Partial<Layer['noise']>) {
+    const layer = this.getLayerById(id)
+    if (!layer) return
+    this.state.updateLayerNoise(id, buildPatch(layer))
+  }
+
+  private updateDistortion(id: string, buildPatch: (layer: Layer) => Partial<Layer['distortion']>) {
+    const layer = this.getLayerById(id)
+    if (!layer) return
+    this.state.updateLayerDistortion(id, buildPatch(layer))
+  }
+
+  private updateRemap(id: string, buildPatch: (layer: Layer) => Partial<Layer['remap']>) {
+    const layer = this.getLayerById(id)
+    if (!layer) return
+    this.state.updateLayerRemap(id, buildPatch(layer))
+  }
+
   constructor(state: StateManager) {
     this.state = state
     this.el = document.createElement('div')
@@ -130,7 +152,7 @@ export class PropertiesPanel {
     typeLabel.textContent = 'Type'
 
     const typeSel = new Select(typeOptions, layer.noise.type, (v) => {
-      this.state.updateLayerNoise(id, { type: v as NoiseType })
+      this.updateNoise(id, () => ({ type: v as NoiseType }))
     })
     typeRow.appendChild(typeLabel)
     typeRow.appendChild(typeSel.el)
@@ -148,7 +170,7 @@ export class PropertiesPanel {
         { value: WorleyMode.F2, label: 'F2 (second)' },
         { value: WorleyMode.F2F1, label: 'F2-F1 (edge)' },
       ], layer.noise.worleyMode, (v) => {
-        this.state.updateLayerNoise(id, { worleyMode: v as WorleyMode })
+        this.updateNoise(id, () => ({ worleyMode: v as WorleyMode }))
       })
       wRow.appendChild(wLabel)
       wRow.appendChild(wSel.el)
@@ -159,34 +181,34 @@ export class PropertiesPanel {
     body.appendChild(new Slider({
       label: 'Scale X', min: 0.1, max: 20, step: 0.1, value: layer.noise.scale[0],
       defaultValue: 3.0, decimals: 2,
-      onInput: (v) => this.state.updateLayerNoise(id, { scale: [v, layer.noise.scale[1], layer.noise.scale[2]] }),
-      onChange: (v) => this.state.updateLayerNoise(id, { scale: [v, layer.noise.scale[1], layer.noise.scale[2]] }),
+      onInput: (v) => this.updateNoise(id, (current) => ({ scale: [v, current.noise.scale[1], current.noise.scale[2]] })),
+      onChange: (v) => this.updateNoise(id, (current) => ({ scale: [v, current.noise.scale[1], current.noise.scale[2]] })),
     }).el)
     body.appendChild(new Slider({
       label: 'Scale Y', min: 0.1, max: 20, step: 0.1, value: layer.noise.scale[1],
       defaultValue: 3.0, decimals: 2,
-      onInput: (v) => this.state.updateLayerNoise(id, { scale: [layer.noise.scale[0], v, layer.noise.scale[2]] }),
-      onChange: (v) => this.state.updateLayerNoise(id, { scale: [layer.noise.scale[0], v, layer.noise.scale[2]] }),
+      onInput: (v) => this.updateNoise(id, (current) => ({ scale: [current.noise.scale[0], v, current.noise.scale[2]] })),
+      onChange: (v) => this.updateNoise(id, (current) => ({ scale: [current.noise.scale[0], v, current.noise.scale[2]] })),
     }).el)
     body.appendChild(new Slider({
       label: 'Scale Z', min: 0.1, max: 20, step: 0.1, value: layer.noise.scale[2],
       defaultValue: 3.0, decimals: 2,
-      onInput: (v) => this.state.updateLayerNoise(id, { scale: [layer.noise.scale[0], layer.noise.scale[1], v] }),
-      onChange: (v) => this.state.updateLayerNoise(id, { scale: [layer.noise.scale[0], layer.noise.scale[1], v] }),
+      onInput: (v) => this.updateNoise(id, (current) => ({ scale: [current.noise.scale[0], current.noise.scale[1], v] })),
+      onChange: (v) => this.updateNoise(id, (current) => ({ scale: [current.noise.scale[0], current.noise.scale[1], v] })),
     }).el)
 
     body.appendChild(new Slider({
       label: 'Amplitude', min: 0, max: 2, step: 0.01, value: layer.noise.amplitude,
       defaultValue: 1.0, decimals: 2,
-      onInput: (v) => this.state.updateLayerNoise(id, { amplitude: v }),
-      onChange: (v) => this.state.updateLayerNoise(id, { amplitude: v }),
+      onInput: (v) => this.updateNoise(id, () => ({ amplitude: v })),
+      onChange: (v) => this.updateNoise(id, () => ({ amplitude: v })),
     }).el)
 
     body.appendChild(new Slider({
       label: 'Seed', min: 0, max: 100, step: 1, value: layer.noise.seed,
       defaultValue: 0, decimals: 0,
-      onInput: (v) => this.state.updateLayerNoise(id, { seed: v }),
-      onChange: (v) => this.state.updateLayerNoise(id, { seed: v }),
+      onInput: (v) => this.updateNoise(id, () => ({ seed: v })),
+      onChange: (v) => this.updateNoise(id, () => ({ seed: v })),
     }).el)
 
     return section(
@@ -213,7 +235,9 @@ export class PropertiesPanel {
       baseLabel.className = 'prop-label'
       baseLabel.textContent = 'Base Noise'
       const baseSel = new Select(baseOptions, fbm.baseNoise, (v) => {
-        this.state.updateLayerNoise(id, { fbm: { ...fbm, baseNoise: v as NoiseType } })
+        this.updateNoise(id, (current) => ({
+          fbm: { ...current.noise.fbm, baseNoise: v as NoiseType },
+        }))
       })
       baseRow.appendChild(baseLabel)
       baseRow.appendChild(baseSel.el)
@@ -223,20 +247,32 @@ export class PropertiesPanel {
     body.appendChild(new Slider({
       label: 'Octaves', min: 1, max: 8, step: 1, value: fbm.octaves,
       defaultValue: 4, decimals: 0,
-      onInput: (v) => this.state.updateLayerNoise(id, { fbm: { ...fbm, octaves: v } }),
-      onChange: (v) => this.state.updateLayerNoise(id, { fbm: { ...fbm, octaves: v } }),
+      onInput: (v) => this.updateNoise(id, (current) => ({
+        fbm: { ...current.noise.fbm, octaves: v },
+      })),
+      onChange: (v) => this.updateNoise(id, (current) => ({
+        fbm: { ...current.noise.fbm, octaves: v },
+      })),
     }).el)
     body.appendChild(new Slider({
       label: 'Persistence', min: 0.1, max: 1.0, step: 0.01, value: fbm.persistence,
       defaultValue: 0.5, decimals: 2,
-      onInput: (v) => this.state.updateLayerNoise(id, { fbm: { ...fbm, persistence: v } }),
-      onChange: (v) => this.state.updateLayerNoise(id, { fbm: { ...fbm, persistence: v } }),
+      onInput: (v) => this.updateNoise(id, (current) => ({
+        fbm: { ...current.noise.fbm, persistence: v },
+      })),
+      onChange: (v) => this.updateNoise(id, (current) => ({
+        fbm: { ...current.noise.fbm, persistence: v },
+      })),
     }).el)
     body.appendChild(new Slider({
       label: 'Lacunarity', min: 1.0, max: 4.0, step: 0.05, value: fbm.lacunarity,
       defaultValue: 2.0, decimals: 2,
-      onInput: (v) => this.state.updateLayerNoise(id, { fbm: { ...fbm, lacunarity: v } }),
-      onChange: (v) => this.state.updateLayerNoise(id, { fbm: { ...fbm, lacunarity: v } }),
+      onInput: (v) => this.updateNoise(id, (current) => ({
+        fbm: { ...current.noise.fbm, lacunarity: v },
+      })),
+      onChange: (v) => this.updateNoise(id, (current) => ({
+        fbm: { ...current.noise.fbm, lacunarity: v },
+      })),
     }).el)
 
     return section(
@@ -258,12 +294,16 @@ export class PropertiesPanel {
         label: `Rot ${ax}`, min: -180, max: 180, step: 1, value: layer.noise.rotation[i],
         defaultValue: 0, decimals: 0,
         onInput: (v) => {
-          const r: [number,number,number] = [...layer.noise.rotation] as [number,number,number]
+          const current = this.getLayerById(id)
+          if (!current) return
+          const r: [number,number,number] = [...current.noise.rotation] as [number,number,number]
           r[i] = v
           this.state.updateLayerNoise(id, { rotation: r })
         },
         onChange: (v) => {
-          const r: [number,number,number] = [...layer.noise.rotation] as [number,number,number]
+          const current = this.getLayerById(id)
+          if (!current) return
+          const r: [number,number,number] = [...current.noise.rotation] as [number,number,number]
           r[i] = v
           this.state.updateLayerNoise(id, { rotation: r })
         },
@@ -275,12 +315,16 @@ export class PropertiesPanel {
         label: `Offset ${ax}`, min: -10, max: 10, step: 0.1, value: layer.noise.offset[i],
         defaultValue: 0, decimals: 2,
         onInput: (v) => {
-          const o: [number,number,number] = [...layer.noise.offset] as [number,number,number]
+          const current = this.getLayerById(id)
+          if (!current) return
+          const o: [number,number,number] = [...current.noise.offset] as [number,number,number]
           o[i] = v
           this.state.updateLayerNoise(id, { offset: o })
         },
         onChange: (v) => {
-          const o: [number,number,number] = [...layer.noise.offset] as [number,number,number]
+          const current = this.getLayerById(id)
+          if (!current) return
+          const o: [number,number,number] = [...current.noise.offset] as [number,number,number]
           o[i] = v
           this.state.updateLayerNoise(id, { offset: o })
         },
@@ -313,7 +357,7 @@ export class PropertiesPanel {
       { value: DistortionType.Swirl, label: 'Swirl' },
       { value: DistortionType.Polar, label: 'Polar' },
     ], dist.type, (v) => {
-      this.state.updateLayerDistortion(id, { type: v as DistortionType })
+      this.updateDistortion(id, () => ({ type: v as DistortionType }))
     })
     typeRow.appendChild(typeLabel)
     typeRow.appendChild(typeSel.el)
@@ -323,16 +367,16 @@ export class PropertiesPanel {
       body.appendChild(new Slider({
         label: 'Strength', min: 0, max: 2, step: 0.01, value: dist.strength,
         defaultValue: 0.3, decimals: 2,
-        onInput: (v) => this.state.updateLayerDistortion(id, { strength: v }),
-        onChange: (v) => this.state.updateLayerDistortion(id, { strength: v }),
+        onInput: (v) => this.updateDistortion(id, () => ({ strength: v })),
+        onChange: (v) => this.updateDistortion(id, () => ({ strength: v })),
       }).el)
 
       if (dist.type === DistortionType.DomainWarp) {
         body.appendChild(new Slider({
           label: 'Warp Freq', min: 0.5, max: 10, step: 0.1, value: dist.warpFrequency,
           defaultValue: 2.0, decimals: 2,
-          onInput: (v) => this.state.updateLayerDistortion(id, { warpFrequency: v }),
-          onChange: (v) => this.state.updateLayerDistortion(id, { warpFrequency: v }),
+          onInput: (v) => this.updateDistortion(id, () => ({ warpFrequency: v })),
+          onChange: (v) => this.updateDistortion(id, () => ({ warpFrequency: v })),
         }).el)
       }
 
@@ -340,8 +384,8 @@ export class PropertiesPanel {
         body.appendChild(new Slider({
           label: 'Swirl Amt', min: -5, max: 5, step: 0.1, value: dist.swirlAmount,
           defaultValue: 1.0, decimals: 2,
-          onInput: (v) => this.state.updateLayerDistortion(id, { swirlAmount: v }),
-          onChange: (v) => this.state.updateLayerDistortion(id, { swirlAmount: v }),
+          onInput: (v) => this.updateDistortion(id, () => ({ swirlAmount: v })),
+          onChange: (v) => this.updateDistortion(id, () => ({ swirlAmount: v })),
         }).el)
       }
     }
@@ -363,34 +407,34 @@ export class PropertiesPanel {
     body.appendChild(new Slider({
       label: 'In Min', min: 0, max: 1, step: 0.01, value: remap.inputMin,
       defaultValue: 0, decimals: 2,
-      onInput: (v) => this.state.updateLayerRemap(id, { inputMin: v }),
-      onChange: (v) => this.state.updateLayerRemap(id, { inputMin: v }),
+      onInput: (v) => this.updateRemap(id, () => ({ inputMin: v })),
+      onChange: (v) => this.updateRemap(id, () => ({ inputMin: v })),
     }).el)
     body.appendChild(new Slider({
       label: 'In Max', min: 0, max: 1, step: 0.01, value: remap.inputMax,
       defaultValue: 1, decimals: 2,
-      onInput: (v) => this.state.updateLayerRemap(id, { inputMax: v }),
-      onChange: (v) => this.state.updateLayerRemap(id, { inputMax: v }),
+      onInput: (v) => this.updateRemap(id, () => ({ inputMax: v })),
+      onChange: (v) => this.updateRemap(id, () => ({ inputMax: v })),
     }).el)
     body.appendChild(new Slider({
       label: 'Out Min', min: 0, max: 1, step: 0.01, value: remap.outputMin,
       defaultValue: 0, decimals: 2,
-      onInput: (v) => this.state.updateLayerRemap(id, { outputMin: v }),
-      onChange: (v) => this.state.updateLayerRemap(id, { outputMin: v }),
+      onInput: (v) => this.updateRemap(id, () => ({ outputMin: v })),
+      onChange: (v) => this.updateRemap(id, () => ({ outputMin: v })),
     }).el)
     body.appendChild(new Slider({
       label: 'Out Max', min: 0, max: 1, step: 0.01, value: remap.outputMax,
       defaultValue: 1, decimals: 2,
-      onInput: (v) => this.state.updateLayerRemap(id, { outputMax: v }),
-      onChange: (v) => this.state.updateLayerRemap(id, { outputMax: v }),
+      onInput: (v) => this.updateRemap(id, () => ({ outputMax: v })),
+      onChange: (v) => this.updateRemap(id, () => ({ outputMax: v })),
     }).el)
 
     body.appendChild(new BezierCurveEditor({
       label: 'Remap Curve',
       value: remap.remapCurve,
       defaultValue: [0.25, 0.25, 0.75, 0.75],
-      onInput: (v) => this.state.updateLayerRemap(id, { remapCurve: v }),
-      onChange: (v) => this.state.updateLayerRemap(id, { remapCurve: v }),
+      onInput: (v) => this.updateRemap(id, () => ({ remapCurve: v })),
+      onChange: (v) => this.updateRemap(id, () => ({ remapCurve: v })),
     }).el)
 
     const featherShapeRow = document.createElement('div')
@@ -402,7 +446,7 @@ export class PropertiesPanel {
       { value: FeatherShape.Box, label: 'Box' },
       { value: FeatherShape.Sphere, label: 'Sphere' },
     ], remap.featherShape, (v) => {
-      this.state.updateLayerRemap(id, { featherShape: v as FeatherShape })
+      this.updateRemap(id, () => ({ featherShape: v as FeatherShape }))
     })
     featherShapeRow.appendChild(featherShapeLabel)
     featherShapeRow.appendChild(featherShapeSel.el)
@@ -411,27 +455,27 @@ export class PropertiesPanel {
     body.appendChild(new Slider({
       label: 'Feather X', min: 0, max: 0.5, step: 0.01, value: remap.featherX,
       defaultValue: 0, decimals: 2,
-      onInput: (v) => this.state.updateLayerRemap(id, { featherX: v }),
-      onChange: (v) => this.state.updateLayerRemap(id, { featherX: v }),
+      onInput: (v) => this.updateRemap(id, () => ({ featherX: v })),
+      onChange: (v) => this.updateRemap(id, () => ({ featherX: v })),
     }).el)
     body.appendChild(new Slider({
       label: 'Feather Y', min: 0, max: 0.5, step: 0.01, value: remap.featherY,
       defaultValue: 0, decimals: 2,
-      onInput: (v) => this.state.updateLayerRemap(id, { featherY: v }),
-      onChange: (v) => this.state.updateLayerRemap(id, { featherY: v }),
+      onInput: (v) => this.updateRemap(id, () => ({ featherY: v })),
+      onChange: (v) => this.updateRemap(id, () => ({ featherY: v })),
     }).el)
     body.appendChild(new Slider({
       label: 'Feather Z', min: 0, max: 0.5, step: 0.01, value: remap.featherZ,
       defaultValue: 0, decimals: 2,
-      onInput: (v) => this.state.updateLayerRemap(id, { featherZ: v }),
-      onChange: (v) => this.state.updateLayerRemap(id, { featherZ: v }),
+      onInput: (v) => this.updateRemap(id, () => ({ featherZ: v })),
+      onChange: (v) => this.updateRemap(id, () => ({ featherZ: v })),
     }).el)
     body.appendChild(new BezierCurveEditor({
       label: 'Feather Curve',
       value: remap.featherCurve,
       defaultValue: [0.25, 0.25, 0.75, 0.75],
-      onInput: (v) => this.state.updateLayerRemap(id, { featherCurve: v }),
-      onChange: (v) => this.state.updateLayerRemap(id, { featherCurve: v }),
+      onInput: (v) => this.updateRemap(id, () => ({ featherCurve: v })),
+      onChange: (v) => this.updateRemap(id, () => ({ featherCurve: v })),
     }).el)
 
     const invertToggle = new Toggle('Invert', layer.invert, (v) => {
@@ -451,6 +495,14 @@ export class PropertiesPanel {
 
 function getLayerEditorSignature(layer: Layer | null): string | null {
   if (!layer) return null
-  return [layer.id, layer.noise.type, layer.distortion.type].join('|')
+  return [
+    layer.id,
+    layer.noise.type,
+    layer.noise.worleyMode,
+    layer.noise.fbm.baseNoise,
+    layer.distortion.type,
+    layer.remap.featherShape,
+    String(layer.invert),
+  ].join('|')
 }
 

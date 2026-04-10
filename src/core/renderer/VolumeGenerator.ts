@@ -186,7 +186,7 @@ export class VolumeGenerator {
       compiler.setUniform(genProg, 'u_animEvolutions', animEvolutions)
       compiler.setUniformBool(genProg, 'u_invert', layer.invert)
 
-      if (noiseType === NoiseType.FBM || noiseType === NoiseType.Worley) {
+      if (noiseType === NoiseType.FBM) {
         const fbm = layer.noise.fbm
         if (fbm) {
           compiler.setUniformi(genProg, 'u_octaves', fbm.octaves)
@@ -194,7 +194,7 @@ export class VolumeGenerator {
           compiler.setUniform(genProg, 'u_lacunarity', fbm.lacunarity)
         }
       }
-      if (noiseType === NoiseType.Worley) {
+      if (noiseType === NoiseType.Worley || (noiseType === NoiseType.FBM && fbmBase === NoiseType.Worley)) {
         const wMode = layer.noise.worleyMode === 'f1' ? 0 : layer.noise.worleyMode === 'f2' ? 1 : 2
         compiler.setUniformi(genProg, 'u_worleyMode', wMode)
       }
